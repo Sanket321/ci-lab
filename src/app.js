@@ -9,7 +9,7 @@ const http = require('node:http');
 function greet(name) {
   const clean = String(name ?? '').trim();
   if (!clean) return 'Hello, World!';
-  return `Hello, ${clean}!`;
+  return `Hi, ${clean}!`;
 }
 
 function sendJson(res, statusCode, body) {
