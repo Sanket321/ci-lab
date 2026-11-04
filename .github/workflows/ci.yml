@@ -1,0 +1,81 @@
+# Your first CI pipeline.
+# Save this file in your repo at .github/workflows/ci.yml
+# GitHub finds it automatically and runs it.
+
+name: CI
+
+# WHEN does the pipeline run?
+on:
+  pull_request:            # every pull request
+  push:
+    branches: [main]       # and every merge into main
+
+# If a newer commit arrives on the same branch, cancel the older run.
+# This saves time and build minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: the pipeline may only read the code.
+permissions:
+  contents: read
+
+jobs:
+  # ---------- Stage 1: build and test ----------
+  test:
+    name: Build and test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Run the same job on several Node versions in parallel.
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm                 # reuse downloads between runs (faster)
+
+      - name: Install dependencies
+        run: npm ci                  # exact versions from package-lock.json
+
+      - name: Build (syntax check)
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+  # ---------- Stage 2: package ----------
+  # "Build once, deploy many": make one artifact and keep it.
+  package:
+    name: Package the app
+    needs: test                      # only runs if every test job passed
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Create the package
+        run: npm pack                # creates ci-lab-1.0.0.tgz
+
+      - name: Save the package as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-lab-package-${{ github.sha }}   # unique name per commit
+          path: "*.tgz"
+          retention-days: 7
